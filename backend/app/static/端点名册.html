@@ -24,9 +24,15 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>端点名册</h1>
-      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <h1>端点名册策略</h1>
+      <p>端点密钥版本与签名规算法版本共同参与签名；停用端点会在投递锁内被中文拒绝。</p>
     </header>
+
+<section class="卷" data-source="/api/签名规/对账">
+  <h2>全端点共同遵守的签名策略</h2>
+  <p class="说明" id="策略文">加载中…</p>
+  <p><a class="按钮 次" href="/签名规.html">前往签名规列表换版/对账</a></p>
+</section>
 
 <section class="卷">
   <label>端点键</label><input id="端点键" placeholder="ep-new"/>
@@ -36,21 +42,56 @@
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="登记">登记端点</button>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>端点键</th><th>名称</th><th>回调URL</th><th>密钥版本</th><th>启用</th><th>操作</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷" data-source="/api/端点">
+  <div class="表绕"><table>
+    <thead><tr><th>端点键</th><th>名称</th><th>回调URL</th><th>端点密钥版本</th><th>启用策略</th><th>操作</th></tr></thead>
+    <tbody id="表"></tbody>
+  </table></div>
+</section>
 
   </main>
 
 <script>
+async function 刷策略() {
+  const rep = await 投递台.getJSON('/api/签名规/对账');
+  document.getElementById('策略文').textContent =
+    `现行签名规算法 ${rep.现行算法版本}（${rep.现行算法名称}），指纹 ${rep.现行算法指纹}。` +
+    `端点表的“密钥版本”用于选择 hook-secret；签名算法新旧口径由签名规决定。` +
+    `对账：新版已齐 ${rep.新版已齐数}，旧算成功 ${rep.旧算成功数}。`;
+}
+
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/端点');
-  const tb = document.getElementById('表'); tb.innerHTML='';
+  const tb = document.getElementById('表');
+  tb.innerHTML = '';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.名称)+'</td><td>'+投递台.安全文本(r.回调URL)+'</td><td>'+投递台.安全文本(r.密钥版本)+'</td><td></td><td></td>');
-    tr.children[4].appendChild(投递台.徽章(r.启用 ? '启用' : '停用'));
-    const btn = document.createElement('button'); btn.className='按钮 次'; btn.type='button';
+    const tr = 投递台.行(
+      '<td>'+投递台.安全文本(r.端点键)+'</td>' +
+      '<td>'+投递台.安全文本(r.名称)+'</td>' +
+      '<td>'+投递台.安全文本(r.回调URL)+'</td>' +
+      '<td>'+投递台.安全文本(r.密钥版本)+'</td>' +
+      '<td></td><td></td>'
+    );
+    const policy = r.启用
+      ? `启用：可入队/投递；使用密钥版本 ${r.密钥版本}`
+      : `停用：拒绝入队/投递；保留名册与历史账`;
+    const cell = document.createElement('div');
+    cell.className = '命运单元';
+    cell.appendChild(投递台.徽章(r.启用 ? '启用' : '停用'));
+    const small = document.createElement('small');
+    small.className = '命运文';
+    small.textContent = policy;
+    tr.children[4].appendChild(cell);
+
+    const btn = document.createElement('button');
+    btn.className = '按钮 次'; btn.type = 'button';
     btn.textContent = r.启用 ? '停用' : '启用';
-    btn.onclick = async () => { await 投递台.postJSON('/api/端点/启用', {端点键:r.端点键, 启用: !r.启用}); await 刷表(); };
-    tr.children[5].appendChild(btn); tb.appendChild(tr);
+    btn.onclick = async () => {
+      await 投递台.postJSON('/api/端点/启用', {端点键:r.端点键, 启用: !r.启用});
+      await 刷表();
+    };
+    tr.children[5].appendChild(btn);
+    tb.appendChild(tr);
   }
 }
 document.getElementById('登记').onclick = async () => {
@@ -65,6 +106,7 @@ document.getElementById('登记').onclick = async () => {
     await 刷表();
   } catch (e) { document.getElementById('消息').textContent = e.message; }
 };
+刷策略();
 刷表();
 </script>
 

@@ -70,6 +70,82 @@ def create_app() -> Flask:
         except ValueError as e:
             return jsonify({"错误": str(e)}), 400
 
+    @app.get("/api/签名规/对账")
+    def api_签名规对账_get():
+        return jsonify(签名目录.签名对账())
+
+    @app.post("/api/签名规/对账")
+    def api_签名规对账_post():
+        return jsonify(签名目录.签名对账())
+
+    @app.get("/api/签名审计")
+    def api_签名审计():
+        return jsonify({"账册": 签名目录.审计列表()})
+
+    @app.get("/api/审计账册")
+    def api_审计账册():
+        # 与 SQLite 视图 审计账册 同名同义；直接返回数组，方便验收脚本读取。
+        return jsonify(签名目录.审计列表())
+
+    @app.get("/api/审计")
+    def api_审计():
+        return jsonify({"账册": 签名目录.审计列表()})
+
+    @app.get("/api/签名换版")
+    def api_签名换版状态():
+        rep = 签名目录.签名对账()
+        rep.update({
+            "模块": "签名换版",
+            "骨签": "hook-04-签名换版拒旧",
+            "工程形态": "审计账册指纹+拒旧算回刷",
+        })
+        return jsonify(rep)
+
+    @app.post("/api/签名换版/对账")
+    def api_签名换版对账():
+        return jsonify(签名目录.签名对账())
+
+    @app.get("/api/签名换版/对账")
+    def api_签名换版对账_get():
+        return jsonify(签名目录.签名对账())
+
+    @app.post("/api/签名规/换版")
+    def api_签名规换版():
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            patch = dict(body)
+            if body.get("目标算法版本") and not body.get("签名算法版本"):
+                patch["签名算法版本"] = body["目标算法版本"]
+            return jsonify(签名目录.改签名规(patch))
+        except ValueError as e:
+            return jsonify({"错误": str(e)}), 400
+
+    # 语义别名：空桩 modules/签名换版 挂到真实服务。
+    @app.post("/api/签名换版")
+    def api_签名换版():
+        return api_签名规换版()
+
+    @app.post("/api/签名规/拒回刷")
+    def api_签名规拒回刷():
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            rep = 签名目录.拒旧算回刷(
+                body.get("尝试号"),
+                目标算法版本=body.get("目标算法版本") or body.get("算法版本"),
+                目标指纹=body.get("目标指纹"),
+            )
+            return jsonify(rep)
+        except ValueError as e:
+            return jsonify({"错误": str(e)}), 409
+
+    @app.post("/api/签名规/拒旧算回刷")
+    def api_签名规拒旧算回刷全名():
+        return api_签名规拒回刷()
+
+    @app.post("/api/签名换版/拒旧算回刷")
+    def api_签名换版拒旧算回刷():
+        return api_签名规拒回刷()
+
     @app.get("/api/事件")
     def api_事件():
         return jsonify(签名目录.事件列表())
@@ -97,7 +173,18 @@ def create_app() -> Flask:
     def api_投递():
         body = request.get_json(force=True, silent=True) or {}
         try:
-            return jsonify(投递.投递一次(body["事件号"], bool(body.get("强制失败"))))
+            return jsonify(投递.投递一次(
+                body["事件号"],
+                bool(body.get("强制失败")),
+                请求算法版本=(
+                    body.get("请求算法版本")
+                    or body.get("算法版本")
+                    or body.get("目标算法版本")
+                ),
+                回刷=bool(body.get("回刷") or body.get("旧算回刷")),
+            ))
+        except 投递.旧算拒绝错误 as e:
+            return jsonify({"错误": str(e), "尝试": e.尝试}), 409
         except (KeyError, ValueError) as e:
             return jsonify({"错误": str(e)}), 400
 

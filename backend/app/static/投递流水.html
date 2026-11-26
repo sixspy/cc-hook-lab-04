@@ -24,46 +24,112 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>投递流水</h1>
-      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <h1>投递流水详情</h1>
+      <p>每行与库内 <code>投递尝试</code> 同源：直接读算法版本、算法指纹、签名摘要、尝试成败与中文拒因。</p>
     </header>
 
 <section class="卷">
   <label>事件号</label><input id="事件号" placeholder="EVT-..."/>
-  <label><input type="checkbox" id="强制失败"/> 强制失败（测死信）</label>
-  <p class="消息" id="消息"></p>
-  <button class="按钮" type="button" id="投递钮">签名投递一次</button>
+  <label><input type="checkbox" id="强制失败" style="width:auto;max-width:none"/> 强制失败（测重试/死信）</label>
+  <label><input type="checkbox" id="旧算回刷" style="width:auto;max-width:none"/> 模拟旧算法回刷（签名规 v2 时必须拒）</label>
+  <p class="消息" id="消息" role="status"></p>
+  <button class="按钮" type="button" id="投递钮">按签名规现行算法投递</button>
+  <button class="按钮 次" type="button" id="旧算钮">用 v1 旧算补投/回刷（应拒）</button>
   <button class="按钮 次" type="button" id="批量钮">批量重试待投</button>
+  <p class="命运文" id="响应命运"></p>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>尝试号</th><th>事件号</th><th>端点键</th><th>签名摘要</th><th>状态</th><th>响应码</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷" data-source="/api/投递">
+  <div class="表绕"><table>
+    <thead><tr>
+      <th>尝试号</th><th>事件号</th><th>端点键</th><th>算法版本</th><th>算法指纹</th>
+      <th>签名摘要</th><th>尝试成败/中文命运</th><th>响应码</th><th>中文拒因/原因</th><th>详情</th>
+    </tr></thead>
+    <tbody id="表"></tbody>
+  </table></div>
+</section>
 
   </main>
 
 <script>
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/投递');
-  const tb = document.getElementById('表'); tb.innerHTML='';
+  const tb = document.getElementById('表');
+  tb.innerHTML = '';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.尝试号)+'</td><td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.签名摘要)+'</td><td></td><td>'+投递台.安全文本(r.响应码)+'</td>');
-    tr.children[4].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
+    const tr = document.createElement('tr');
+    const tdTry = document.createElement('td');
+    tdTry.textContent = r.尝试号 || '';
+    const tdEvent = document.createElement('td');
+    tdEvent.innerHTML = 投递台.事件链接(r.事件号);
+    const tdEp = document.createElement('td');
+    tdEp.textContent = r.端点键 || '';
+    const tdVer = document.createElement('td');
+    tdVer.textContent = r.算法版本 || '未记录';
+    const tdFp = document.createElement('td');
+    tdFp.innerHTML = `<code>${投递台.安全文本(r.算法指纹 || '未记录')}</code>`;
+    const tdSig = document.createElement('td');
+    tdSig.innerHTML = `<code class="摘要">${投递台.安全文本(r.签名摘要 || '')}</code>`;
+    const tdStatus = document.createElement('td');
+    tdStatus.appendChild(投递台.命运节点(r.状态, r));
+    const tdCode = document.createElement('td');
+    tdCode.textContent = r.响应码 ?? '';
+    const tdReason = document.createElement('td');
+    tdReason.className = '拒因';
+    tdReason.textContent = r.拒因 || r.说明 || '';
+    const tdDetail = document.createElement('td');
+    tdDetail.innerHTML = `<a href="/事件详情.html?事件号=${encodeURIComponent(r.事件号 || '')}">事件详情</a>`;
+    tr.append(tdTry, tdEvent, tdEp, tdVer, tdFp, tdSig, tdStatus, tdCode, tdReason, tdDetail);
+    tb.appendChild(tr);
   }
 }
+
+async function 投递(body) {
+  const 消息 = document.getElementById('消息');
+  const 命运 = document.getElementById('响应命运');
+  消息.textContent = '';
+  命运.textContent = '';
+  try {
+    const rep = await 投递台.postJSON('/api/投递', body);
+    消息.textContent = `${rep.尝试号} · ${rep.状态} · ${rep.算法版本 || '未记录版本'}`;
+    命运.textContent = rep.命运 || 投递台.命运文案(rep.状态, rep);
+    await 刷表();
+  } catch (e) {
+    消息.textContent = e.message;
+    命运.textContent = e.data?.尝试?.命运 || e.message;
+    await 刷表();
+    throw e;
+  }
+}
+
 document.getElementById('投递钮').onclick = async () => {
+  const 事件号 = document.getElementById('事件号').value;
+  try {
+    await 投递({
+      事件号,
+      强制失败: document.getElementById('强制失败').checked,
+      回刷: document.getElementById('旧算回刷').checked,
+      算法版本: document.getElementById('旧算回刷').checked ? 'v1' : undefined,
+    });
+  } catch { /* 中文错误已显示 */ }
+};
+
+document.getElementById('旧算钮').onclick = async () => {
+  try {
+    await 投递({事件号: document.getElementById('事件号').value, 算法版本: 'v1', 回刷: true});
+  } catch { /* 预期拒绝，页面已显示中文拒因并落失败尝试 */ }
+};
+
+document.getElementById('批量钮').onclick = async () => {
   const 消息 = document.getElementById('消息');
   try {
-    const rep = await 投递台.postJSON('/api/投递', {
-      事件号: document.getElementById('事件号').value,
-      强制失败: document.getElementById('强制失败').checked,
-    });
-    消息.textContent = JSON.stringify(rep);
+    const rep = await 投递台.postJSON('/api/投递/批量重试', {});
+    消息.textContent = `批量完成 ${rep.条数} 条；签名规现行版本 ${rep.签名规?.签名算法版本 || rep.签名规?.算法版本 || ''}`;
     await 刷表();
   } catch (e) { 消息.textContent = e.message; }
 };
-document.getElementById('批量钮').onclick = async () => {
-  const rep = await 投递台.postJSON('/api/投递/批量重试', {});
-  document.getElementById('消息').textContent = '批量 '+rep.条数;
-  await 刷表();
-};
+
+const qid = 投递台.查询参数('事件号');
+if (qid) document.getElementById('事件号').value = qid;
 刷表();
 </script>
 

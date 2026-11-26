@@ -24,13 +24,22 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>投递台</h1>
-      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <h1>Webhook 签名投递台</h1>
+      <p>主链：端点登记 → 事件入队 → 现行算法签名投递 → 重试/死信 → 投递互证。骨签 <code>hook-04-签名换版拒旧</code>。</p>
     </header>
 
 <section class="卷"><div class="指标" id="指标"></div></section>
-<section class="卷"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></section>
-<section class="卷"><p class="说明" id="主链"></p><button class="按钮" type="button" id="互证钮">跑投递互证</button><pre id="互证出" class="说明"></pre></section>
+<section class="卷">
+  <h2>事件命运目录</h2>
+  <table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>中文命运</th><th>链路</th></tr></thead><tbody id="表"></tbody></table>
+</section>
+<section class="卷">
+  <p class="说明" id="主链"></p>
+  <p class="说明" id="算法文"></p>
+  <button class="按钮" type="button" id="互证钮">跑投递互证</button>
+  <a class="按钮 次" href="/签名规.html">打开签名规</a>
+  <pre id="互证出" class="说明"></pre>
+</section>
 
   </main>
 
@@ -44,13 +53,22 @@
     d.innerHTML = '<small>'+投递台.安全文本(k)+'</small><b>'+投递台.安全文本(v)+'</b>';
     box.appendChild(d);
   }
+  document.getElementById('算法文').textContent =
+    `现行签名算法：${o.现行算法版本 || '未记录'} / ${o.现行算法名称 || ''} / 指纹 ${o.现行算法指纹 || '未记录'}。旧算法成功不算新版已齐。`;
   const c = await 投递台.getJSON('/api/仓情');
   document.getElementById('主链').textContent = c.主链 || '';
   const rows = await 投递台.getJSON('/api/事件');
   const tb = document.getElementById('表');
   for (const r of rows.slice(0,12)) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td></td>');
-    tr.children[3].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>'+投递台.事件链接(r.事件号)+'</td>' +
+      '<td>'+投递台.安全文本(r.事件类型)+'</td>' +
+      '<td>'+投递台.安全文本(r.端点键)+'</td>' +
+      '<td></td>' +
+      '<td><a href="/投递流水.html?事件号='+encodeURIComponent(r.事件号)+'">投递</a></td>';
+    tr.children[3].appendChild(投递台.命运节点(r.状态, r));
+    tb.appendChild(tr);
   }
   document.getElementById('互证钮').onclick = async () => {
     document.getElementById('互证出').textContent = JSON.stringify(await 投递台.postJSON('/api/互证/跑',{}), null, 2);

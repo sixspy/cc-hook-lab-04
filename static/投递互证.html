@@ -25,23 +25,37 @@
   <main class="主区">
     <header class="页头">
       <h1>投递互证</h1>
-      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <p>数量账与签名账一起对：旧算成功不得冒充新版已齐；联查明细不写回正式投递集合。</p>
     </header>
 
 <section class="卷">
   <button class="按钮" type="button" id="跑">跑互证</button>
+  <a class="按钮 次" href="/签名规.html">看签名规对账</a>
   <pre id="出" class="说明"></pre>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>批次号</th><th>时刻</th><th>事件总数</th><th>已投递</th><th>死信</th><th>待投</th><th>对齐</th><th>说明</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷"><div class="表绕"><table><thead><tr>
+  <th>批次号</th><th>时刻</th><th>事件总数</th><th>已投递</th><th>死信</th><th>待投</th>
+  <th>数量对齐</th><th>签名对齐</th><th>新版已齐</th><th>旧算成功</th><th>说明</th>
+</tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
 <script>
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/互证');
-  const tb = document.getElementById('表'); tb.innerHTML='';
+  const tb = document.getElementById('表');
+  tb.innerHTML = '';
   for (const r of rows) {
-    tb.appendChild(投递台.行('<td>'+r.批次号+'</td><td>'+投递台.安全文本(r.时刻)+'</td><td>'+r.事件总数+'</td><td>'+r.已投递数+'</td><td>'+r.死信数+'</td><td>'+r.待投数+'</td><td>'+(r.是否对齐?'是':'否')+'</td><td>'+投递台.安全文本(r.说明)+'</td>'));
+    const tr = 投递台.行(
+      '<td>'+r.批次号+'</td><td>'+投递台.安全文本(r.时刻)+'</td><td>'+r.事件总数+'</td>' +
+      '<td>'+r.已投递数+'</td><td>'+r.死信数+'</td><td>'+r.待投数+'</td>' +
+      '<td>'+(r.是否对齐?'是':'否')+'</td>' +
+      '<td>'+(r.签名对齐 ? '是' : '否')+'</td>' +
+      '<td>'+投递台.安全文本(r.新版已齐数 ?? '')+'</td>' +
+      '<td>'+投递台.安全文本(r.旧算成功数 ?? '')+'</td>' +
+      '<td>'+投递台.安全文本(r.说明)+'</td>'
+    );
+    tb.appendChild(tr);
   }
 }
 document.getElementById('跑').onclick = async () => {

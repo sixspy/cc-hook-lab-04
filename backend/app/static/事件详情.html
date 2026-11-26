@@ -24,25 +24,106 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>事件详情</h1>
-      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <h1>事件详情与投递命运</h1>
+      <p>从事件队列/投递流水点事件号进入；事件、尝试、死信和签名对账均来自同一个 <code>/api/事件/&lt;事件号&gt;</code>。</p>
     </header>
 
 <section class="卷">
   <label>事件号</label><input id="事件号"/>
   <button class="按钮" type="button" id="查">查询</button>
-  <pre id="出" class="说明"></pre>
+  <a class="按钮 次" id="去投递" href="/投递流水.html">去投递/重试</a>
+  <p class="消息" id="消息"></p>
+  <div id="命运头" class="命运头"></div>
+</section>
+
+<section class="卷" id="事件卡卷" hidden>
+  <h2>事件档案</h2>
+  <div class="指标" id="事件卡"></div>
+</section>
+
+<section class="卷" id="对账卷" hidden>
+  <h2>本事件签名口径</h2>
+  <p class="说明" id="对账文"></p>
+</section>
+
+<section class="卷" id="尝试卷" hidden>
+  <h2>投递尝试（含算法版本、签名摘要、成败、中文拒因）</h2>
+  <div class="表绕"><table>
+    <thead><tr><th>尝试号</th><th>算法版本</th><th>算法指纹</th><th>签名摘要</th><th>状态/命运</th><th>响应码</th><th>原因</th><th>时刻</th></tr></thead>
+    <tbody id="尝试表"></tbody>
+  </table></div>
+</section>
+
+<section class="卷" id="死信卷" hidden>
+  <h2>死信卡片</h2>
+  <div id="死信卡"></div>
 </section>
 
   </main>
 
 <script>
-document.getElementById('查').onclick = async () => {
+async function 查询() {
+  const id = document.getElementById('事件号').value.trim();
+  const 消息 = document.getElementById('消息');
+  消息.textContent = '';
+  if (!id) { 消息.textContent = '请输入事件号'; return; }
+  history.replaceState(null, '', `/事件详情.html?事件号=${encodeURIComponent(id)}`);
+  document.getElementById('去投递').href = `/投递流水.html?事件号=${encodeURIComponent(id)}`;
   try {
-    const id = document.getElementById('事件号').value;
-    document.getElementById('出').textContent = JSON.stringify(await 投递台.getJSON('/api/事件/'+encodeURIComponent(id)), null, 2);
-  } catch (e) { document.getElementById('出').textContent = e.message; }
-};
+    const r = await 投递台.getJSON('/api/事件/' + encodeURIComponent(id));
+    document.getElementById('命运头').innerHTML = '';
+    document.getElementById('命运头').appendChild(投递台.命运节点(r.状态, r));
+    document.getElementById('事件卡卷').hidden = false;
+    document.getElementById('事件卡').innerHTML = [
+      ['事件号', r.事件号], ['事件类型', r.事件类型], ['端点键', r.端点键],
+      ['载荷摘要', r.载荷摘要], ['优先级', r.优先级], ['入队时', r.入队时], ['更新时', r.更新时],
+    ].map(([k, v]) => `<div class="卡"><small>${k}</small><b class="卡值">${投递台.安全文本(v)}</b></div>`).join('');
+
+    const 对账 = r.签名对账 || {};
+    document.getElementById('对账卷').hidden = false;
+    const item = (对账.事件 || []).find(x => x.事件号 === r.事件号) || {};
+    document.getElementById('对账文').textContent =
+      `现行 ${对账.现行算法版本 || ''} / ${对账.现行算法指纹 || ''}；` +
+      `新版已齐=${item.新版已齐 ? '是' : '否'}；现行成功=${item.现行成功 || 0}；旧算成功=${item.旧算成功 || 0}。`;
+
+    document.getElementById('尝试卷').hidden = false;
+    const tb = document.getElementById('尝试表');
+    tb.innerHTML = '';
+    for (const a of r.尝试 || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td>${投递台.安全文本(a.尝试号)}</td>` +
+        `<td>${投递台.安全文本(a.算法版本 || '未记录')}</td>` +
+        `<td><code>${投递台.安全文本(a.算法指纹 || '未记录')}</code></td>` +
+        `<td><code class="摘要">${投递台.安全文本(a.签名摘要)}</code></td>` +
+        `<td></td><td>${投递台.安全文本(a.响应码)}</td>` +
+        `<td class="拒因">${投递台.安全文本(a.拒因 || a.说明 || '')}</td>` +
+        `<td>${投递台.安全文本(a.投递时)}</td>`;
+      tr.children[4].appendChild(投递台.命运节点(a.状态, a));
+      tb.appendChild(tr);
+    }
+
+    if (r.死信) {
+      document.getElementById('死信卷').hidden = false;
+      const d = r.死信;
+      document.getElementById('死信卡').innerHTML =
+        `<article class="死信卡">
+           <h3>${投递台.安全文本(d.死信号)} ${投递台.徽章(d.状态).outerHTML}</h3>
+           <p>事件：${投递台.事件链接(d.事件号)}</p>
+           <p>端点：${投递台.安全文本(d.端点键)} · 失败次数：${投递台.安全文本(d.失败次数)}</p>
+           <p class="拒因">末次中文原因：${投递台.安全文本(d.末次原因)}</p>
+           <p><a class="按钮" href="/死信匣.html?事件号=${encodeURIComponent(d.事件号)}">到死信匣处置</a></p>
+         </article>`;
+    } else {
+      document.getElementById('死信卷').hidden = true;
+    }
+  } catch (e) {
+    消息.textContent = e.message;
+  }
+}
+document.getElementById('查').onclick = 查询;
+const qid = 投递台.查询参数('事件号');
+if (qid) { document.getElementById('事件号').value = qid; 查询(); }
 </script>
 
 </body>

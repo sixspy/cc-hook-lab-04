@@ -24,34 +24,177 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>签名规</h1>
-      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <h1>签名规列表与换版拒旧</h1>
+      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服 · <code id="骨签">hook-04-签名换版拒旧</code></p>
     </header>
 
+<section class="卷" data-source="/api/签名规/对账">
+  <h2>现行算法版本与指纹</h2>
+  <div class="指标" id="现行卡"></div>
+  <p class="说明" id="现行命运"></p>
+  <label>切换签名算法版本</label>
+  <select id="目标算法版本">
+    <option value="v2" selected>新版 v2：HMAC-SHA256 全文域分隔</option>
+    <option value="v1">旧版 v1：HMAC-SHA256 截断 24 位（仅换版前历史口径）</option>
+  </select>
+  <p class="消息" id="换版消息"></p>
+  <button class="按钮" type="button" id="换版钮">签名规换版</button>
+  <button class="按钮 次" type="button" id="对账钮">跑签名规对账</button>
+</section>
+
 <section class="卷">
+  <h2>规则键值</h2>
   <label>键</label><input id="键" placeholder="最大重试"/>
   <label>值</label><input id="值"/>
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="保存">保存签名规</button>
+  <div class="表绕"><table>
+    <thead><tr><th>键</th><th>值</th><th>口径</th></tr></thead>
+    <tbody id="规表"></tbody>
+  </table></div>
+  <details><summary>原始 /api/签名规 JSON</summary><pre id="规" class="说明"></pre></details>
 </section>
-<section class="卷"><pre id="规" class="说明"></pre></section>
+
+<section class="卷" data-source="/api/签名规/对账">
+  <h2>签名规对账：旧算不算新版已齐</h2>
+  <div class="指标" id="对账卡"></div>
+  <p class="说明" id="对账结论"></p>
+  <pre id="对账出" class="说明"></pre>
+</section>
+
+<section class="卷">
+  <h2>拒绝旧算回刷</h2>
+  <label>尝试号</label><input id="回刷尝试号" placeholder="TRY-..."/>
+  <p class="消息" id="回刷消息"></p>
+  <button class="按钮" type="button" id="拒回刷钮">审计账册拒旧算回刷</button>
+</section>
+
+<section class="卷" data-source="/api/签名审计">
+  <h2>签名审计账册</h2>
+  <div class="表绕"><table>
+    <thead><tr><th>时刻</th><th>动作</th><th>算法版本</th><th>指纹</th><th>事件号</th><th>尝试号</th><th>结论/详情</th></tr></thead>
+    <tbody id="审计表"></tbody>
+  </table></div>
+</section>
 
   </main>
 
 <script>
-async function 刷() {
-  document.getElementById('规').textContent = JSON.stringify(await 投递台.getJSON('/api/签名规'), null, 2);
+function 卡(k, v, hint) {
+  return `<div class="卡"><small>${投递台.安全文本(k)}</small><b>${投递台.安全文本(v ?? '—')}</b><em>${投递台.安全文本(hint || '')}</em></div>`;
 }
+
+async function 刷规() {
+  const rules = await 投递台.getJSON('/api/签名规');
+  document.getElementById('规').textContent = JSON.stringify(rules, null, 2);
+  const tb = document.getElementById('规表');
+  tb.innerHTML = '';
+  for (const [k, v] of Object.entries(rules)) {
+    const 口径 = (k.includes('算法') || k === '骨签')
+      ? (k === '骨签' ? '骨签' : '投递服务必须读取的签名口径')
+      : '投递/重试策略';
+    tb.appendChild(投递台.行(
+      `<td>${投递台.安全文本(k)}</td><td>${投递台.安全文本(v)}</td><td>${投递台.安全文本(口径)}</td>`
+    ));
+  }
+  return rules;
+}
+
+async function 刷对账(rep) {
+  rep = rep || await 投递台.getJSON('/api/签名规/对账');
+  document.getElementById('现行卡').innerHTML = [
+    卡('算法版本', rep.现行算法版本, '签名规现行版本'),
+    卡('算法指纹', rep.现行算法指纹, '同事务写入尝试'),
+    卡('算法名称', rep.现行算法名称, ''),
+    卡('新版已齐', rep.新版已齐数, '仅现行指纹'),
+    卡('旧算成功', rep.旧算成功数, '不计新版已齐'),
+  ].join('');
+  document.getElementById('现行命运').textContent = rep.签名对齐
+    ? `对账对齐：${rep.现行算法版本} / ${rep.现行算法指纹}；所有已投递成功尝试均为现行口径。`
+    : `对账见红：发现旧算成功 ${rep.旧算成功数} 条、缺新算事件 ${rep.缺新算事件} 个。旧账留审计，不回刷。`;
+  document.getElementById('对账卡').innerHTML = [
+    卡('是否对齐', rep.是否全部对齐 ? '是' : '否', ''),
+    卡('新版已齐数', rep.新版已齐数, ''),
+    卡('旧算成功数', rep.旧算成功数, ''),
+    卡('拒绝旧算数', rep.拒绝旧算数, '含旧算回投/回刷'),
+  ].join('');
+  document.getElementById('对账结论').textContent = rep.明细 && rep.明细.length
+    ? rep.明细.join('\n')
+    : '暂无签名异常。';
+  document.getElementById('对账出').textContent = JSON.stringify(rep, null, 2);
+}
+
+async function 刷审计() {
+  const data = await 投递台.getJSON('/api/签名审计');
+  const tb = document.getElementById('审计表');
+  tb.innerHTML = '';
+  for (const r of data.账册 || []) {
+    const tr = 投递台.行(
+      `<td>${投递台.安全文本(r.时刻)}</td>` +
+      `<td>${投递台.安全文本(r.动作)}</td>` +
+      `<td>${投递台.安全文本(r.算法版本)}</td>` +
+      `<td><code>${投递台.安全文本(r.算法指纹)}</code></td>` +
+      `<td>${r.事件号 ? 投递台.事件链接(r.事件号) : ''}</td>` +
+      `<td>${投递台.安全文本(r.尝试号)}</td>` +
+      `<td>${投递台.安全文本(r.结论)} ${投递台.安全文本(r.详情)}</td>`
+    );
+    tb.appendChild(tr);
+  }
+}
+
 document.getElementById('保存').onclick = async () => {
+  const 消息 = document.getElementById('消息');
   try {
     const k = document.getElementById('键').value;
     const v = document.getElementById('值').value;
     await 投递台.postJSON('/api/签名规', {[k]: v});
-    document.getElementById('消息').textContent = '已保存';
-    await 刷();
-  } catch (e) { document.getElementById('消息').textContent = e.message; }
+    消息.textContent = '已保存；投递下一次加锁读规时立即认现行算法';
+    await Promise.all([刷规(), 刷对账(), 刷审计()]);
+  } catch (e) { 消息.textContent = e.message; }
 };
-刷();
+
+document.getElementById('换版钮').onclick = async () => {
+  const 消息 = document.getElementById('换版消息');
+  try {
+    const 目标算法版本 = document.getElementById('目标算法版本').value;
+    await 投递台.postJSON('/api/签名规/换版', {目标算法版本});
+    消息.textContent = `已切到 ${目标算法版本}；读算法版本与写尝试在同一把 IMMEDIATE 锁内完成`;
+    await Promise.all([刷规(), 刷对账(), 刷审计()]);
+  } catch (e) { 消息.textContent = e.message; }
+};
+
+document.getElementById('对账钮').onclick = async () => {
+  try {
+    const rep = await 投递台.postJSON('/api/签名规/对账', {});
+    await 刷对账(rep);
+    await 刷审计();
+  } catch (e) { document.getElementById('对账结论').textContent = e.message; }
+};
+
+document.getElementById('拒回刷钮').onclick = async () => {
+  const 消息 = document.getElementById('回刷消息');
+  try {
+    const 尝试号 = document.getElementById('回刷尝试号').value;
+    const rep = await 投递台.postJSON('/api/签名规/拒回刷', {尝试号, 目标算法版本: 'v2'});
+    消息.textContent = rep.结论 || '无需回刷';
+    await 刷审计();
+  } catch (e) {
+    消息.textContent = e.message;
+    await 刷审计();
+  }
+};
+
+(async () => {
+  try {
+    await 刷规();
+    await 刷对账();
+    await 刷审计();
+    const q = 投递台.查询参数('尝试号');
+    if (q) document.getElementById('回刷尝试号').value = q;
+  } catch (e) {
+    document.getElementById('消息').textContent = e.message;
+  }
+})();
 </script>
 
 </body>

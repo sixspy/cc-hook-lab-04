@@ -123,3 +123,24 @@
     .登录壳 { grid-template-columns: 1fr; }
     .登录左 { padding: 28px; }
   }
+
+  .表绕 { overflow-x: auto; }
+  .徽章.成功, .徽章.启用 { background: #d1fae5; color: var(--好); }
+  .徽章.失败, .徽章.拒绝, .徽章.停用 { background: #fee2e2; color: var(--险); }
+  .徽章.待处置 { background: #fef3c7; color: #92400e; }
+  .命运单元 { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+  .命运文 { color: #5f554b; font-size: 12px; line-height: 1.45; }
+  .事件链 { color: var(--靛浅); font-weight: 600; text-decoration: none; }
+  .事件链:hover { text-decoration: underline; }
+  code, .摘要 { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .摘要 { font-size: 12px; word-break: break-all; max-width: 260px; display: inline-block; }
+  .拒因 { color: var(--险); font-size: 13px; line-height: 1.45; min-width: 180px; }
+  .卡片列 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .死信卡 { margin-bottom: 0; background: #fff8f0; }
+  .卡头 { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .卡头 h3 { margin: 0; color: var(--靛); font-size: 1rem; }
+  .按钮行 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  a.按钮 { text-decoration: none; font-size: 14px; line-height: 1.2; }
+  .指标 .卡 em { display: block; margin-top: 4px; color: #7a6d61; font-size: 12px; font-style: normal; }
+  .命运头 { margin: 12px 0 0; }
+  input[type="checkbox"] { width: auto !important; max-width: none !important; margin-right: 6px; }
